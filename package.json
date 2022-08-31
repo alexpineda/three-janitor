@@ -4,7 +4,6 @@
   "source": "src/index.ts",
   "main": "dist/index.js",
   "module": "dist/module.js",
-  "types": "dist/types.d.ts",
   "author": "Alex Pineda <586716+alexpineda@users.noreply.github.com>",
   "context": "browser",
   "license": "MIT",
