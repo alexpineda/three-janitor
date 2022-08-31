@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "module": "dist/module.js",
   "author": "Alex Pineda <586716+alexpineda@users.noreply.github.com>",
+  "repository": "https://github.com/alexpineda/three-janitor",
   "context": "browser",
   "license": "MIT",
   "scripts": {
