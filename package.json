@@ -1,6 +1,6 @@
 {
   "name": "three-janitor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "source": "src/index.ts",
   "main": "dist/index.js",
   "module": "dist/module.js",
@@ -11,13 +11,13 @@
     "build": "rollup -c"
   },
   "peerDependencies": {
-    "three": "^0.130.0"
+    "three": ">0.120.0"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^8.4.0",
     "@types/three": "^0.130.0",
     "rollup": "^2.79.0",
-    "three": "^0.130.0",
+    "three": ">0.120.0",
     "tslib": "^2.4.0",
     "typescript": "^4.7.0"
   }
