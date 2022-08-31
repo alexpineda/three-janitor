@@ -1,6 +1,6 @@
 {
   "name": "three-janitor",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "source": "src/index.ts",
   "main": "dist/index.js",
   "module": "dist/module.js",
@@ -9,7 +9,9 @@
   "context": "browser",
   "license": "MIT",
   "scripts": {
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "publish:dry-run": "npm publish --dry-run",
+    "publish": "yarn build && npm publish"
   },
   "peerDependencies": {
     "three": ">0.120.0"
