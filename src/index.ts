@@ -1,130 +1,212 @@
+import { withErrorMessage } from "./utils/with-error-message";
 import { Object3D } from "three";
-import { disposeObject3D } from "./dispose-mesh";
+import { disposeMesh, Object3DLike } from "./dispose-mesh";
 
-interface Disposable {
-    dispose(): void;
+
+function isObject3DLike(obj: any): obj is Object3DLike {
+    return obj && ("material" in obj && "geometry" in obj) || ("children" in obj && obj instanceof Object3D);
 }
-type Callback = () => void;
-type SupportedJanitorTypes = Object3D | Disposable | Callback;
 
-/**
- * A janitor is a utility class that can be used to clean up resources that are no longer needed.
- */
+function isIterable(obj: any): obj is Iterable<any> {
+    // checks for null and undefined
+    if (obj == null) {
+        return false;
+    }
+    return typeof obj[Symbol.iterator] === 'function';
+}
+interface Disposable {
+    dispose: () => void;
+}
+
+type EmptyFn = () => void;
+
+type NodeJSLikeEmitter = { on: (...args: any[]) => void, off: (...args: any[]) => void }
+
+type SupportedJanitorTypes = Object3D | Disposable | EmptyFn | HTMLElement | Iterable<SupportedJanitorTypes>;
+
+export enum JanitorLogLevel {
+    None,
+    Info,
+    Verbose,
+    Debug
+}
+
 export class Janitor {
-    #objects = new Set<Object3D>();
-    #disposable = new Set<Disposable>();
-    #callbacks = new Set<Callback>();
+    static #level = 1;
+    static logLevel = JanitorLogLevel.None;
 
-    /**
-     * @param obj A compatible disposable object to track. Same as janitor.add();
-     */
-    constructor(dispose?: SupportedJanitorTypes) {
-        if (dispose) {
-            this.add(dispose);
+    #trackables = new Set<SupportedJanitorTypes>();
+    #label: string | null = null;
+    #labels = new WeakMap<SupportedJanitorTypes, string>();
+    #keepTrackablesAfterDispose: boolean;
+    logger = console;
+
+    #log(message: string, level: JanitorLogLevel) {
+        if (Janitor.logLevel >= level) {
+            this.logger.debug(message);
         }
     }
 
-    /**
-     * 
-     * @param element The dispatching element
-     * @param event The name of the event
-     * @param callback The event listener
-     * @param options Any event listener options
-     */
-    addEventListener(element: { addEventListener: Function, removeEventListener: Function }, event: string, callback: Function, options?: AddEventListenerOptions) {
-        element.addEventListener(event, callback, options);
-        this.add(() => element.removeEventListener(event, callback));
-    }
-
-    /**
-     * Helper for adding and removing setInterval
-     * @param callback A callback function
-     * @param interval ms interval to call the callback
-     */
-    setInterval(callback: Callback, interval: number) {
-        const _i = setInterval(callback, interval);
-        this.add(() => clearInterval(_i));
-    }
-
-    /**
-     * @param obj A compatible disposable object to track
-     */
-    add<T extends SupportedJanitorTypes>(obj: T): T {
-        if (obj instanceof Object3D) {
-            this.object3d(obj);
-        } else if ("dispose" in obj) {
-            this.disposable(obj);
-        } else if (typeof obj === "function") {
-            this.callback(obj);
+    constructor(label: string | null | undefined | boolean = false, keepTrackablesAfterDispose?: boolean) {
+        if (typeof label === "boolean") {
+            this.#keepTrackablesAfterDispose = label;
         } else {
-            throw new Error("Unsupported type");
+            this.#label = label ?? "";
+            this.#keepTrackablesAfterDispose = keepTrackablesAfterDispose;
+        }
+    }
+
+    addEventListener(element: { addEventListener: Function, removeEventListener: Function }, event: string, label: string | null = null, callback: Function, options?: AddEventListenerOptions) {
+        element.addEventListener(event, callback, options);
+        this.mop(() => element.removeEventListener(event, callback), label);
+        return this;
+    }
+
+    on(nodeEventListener: NodeJSLikeEmitter, event: string, callback: (...args: any[]) => void, label: string | null = null) {
+        nodeEventListener.on(event, callback);
+        this.mop(() => nodeEventListener.off(event, callback), label);
+    }
+
+    mop<T extends SupportedJanitorTypes>(obj: T, label: string | null = null): T {
+        this.#trackables.add(obj);
+        if (label) {
+            this.#labels.set(obj, label);
         }
         return obj;
     }
 
-    /**
-     * Helper for connecting and disconnecting AudioNodes.
-     * @param args An array of AudioNodes to connect and later disconnect
-     */
-    connectAudio(...args: AudioNode[]) {
-        for (let i = 0; i < args.length - 2; i++) {
-            args[i].connect(args[i + 1])
-        }
-        this.add(() => {
-            for (let i = 0; i < args.length - 2; i++) {
-                args[i].disconnect(args[i + 1])
-            }
-        });
-    }
+    #disposeAny(obj: SupportedJanitorTypes & { name?: string }) {
 
-    /**
-     * @param callback A callback function
-     */
-    callback(callback: Callback) {
-        this.#callbacks.add(callback);
-    }
+        const prefix = ">".repeat(Janitor.#level);
 
-    /**
-     * @param obj A disposable object
-     */
-    disposable(obj: Disposable) {
-        this.#disposable.add(obj);
-    }
+        Janitor.#level++;
 
-    /**
-     * @param obj A three.js object
-     */
-    object3d(obj: Object3D) {
-        this.#objects.add(obj);
-    }
+        let total = 1;
 
-    /**
-     * Dispose all objects and callbacks
-     */
-    dispose() {
+        try {
 
-        if (this.#objects.size) {
-            for (const obj of this.#objects) {
-                disposeObject3D(obj);
-                obj.removeFromParent();
-            }
-            this.#objects.clear();
-        }
+            if (this.#labels.has(obj)) {
 
-        if (this.#callbacks.size) {
-            for (const cb of this.#callbacks) {
-                cb();
-            }
-            this.#callbacks.clear();
-        }
+                this.#log(`${prefix} ${this.#labels.get(obj)}`, JanitorLogLevel.Verbose);
+                this.#labels.delete(obj);
 
-        if (this.#disposable.size) {
-            for (const disposable of this.#disposable) {
-                disposable.dispose();
             }
 
-            this.#disposable.clear();
+            if (isObject3DLike(obj)) {
+
+                this.#log(`${prefix} ${obj.type ?? ""} ${obj.name ?? ""}`, JanitorLogLevel.Verbose);
+
+                disposeMesh(obj, (message: string) => this.#log(`${prefix} ${message}`, JanitorLogLevel.Debug));
+
+                if (obj.children) {
+
+                    const children = [...obj.children];
+
+                    obj.clear && obj.clear();
+
+                    for (const child of children) {
+                        total += this.#disposeAny(child);
+                    }
+                }
+
+
+            } else if (obj?.name) {
+
+                this.#log(`${prefix} ${obj.name}`, JanitorLogLevel.Verbose);
+
+            }
+
+            if ("dispose" in obj) {
+                obj.dispose()
+            } else if (typeof obj === "function") {
+                obj();
+            } else if ("remove" in obj) {
+                obj.remove();
+            } else if (isIterable(obj)) {
+                for (const o of obj) {
+                    total += this.#disposeAny(o);
+                }
+            } else {
+                this.logger.warn("Unsupported type", obj);
+            }
+
+        } catch (e) {
+
+            this.logger.error(withErrorMessage(e, "Error disposing object"));
+
         }
+
+        Janitor.#level--;
+
+        return total;
+
+    }
+
+    dispose(...objects: SupportedJanitorTypes[]) {
+
+
+        if (objects.length === 0) {
+
+            if (this.#trackables.size) {
+
+                const prefix = "+".repeat(Janitor.#level);
+
+                if (this.#label !== null) {
+
+                    this.#log(`${prefix} ${this.#label ?? ""} - ${this.#trackables.size} objects`, JanitorLogLevel.Info);
+
+                }
+
+                const total = this.#disposeAny(this.#trackables);
+
+                if (total > 1) {
+
+                    this.#log(`${prefix} ${this.#label ?? ""} - ${total - 1} objects disposed`, JanitorLogLevel.Info);
+
+                }
+
+            }
+
+            if (!this.#keepTrackablesAfterDispose) {
+
+                this.#trackables.clear();
+
+            }
+
+        } else {
+
+            const prefix = "!".repeat(Janitor.#level);
+
+            this.#log(`${prefix} ${this.#label ?? ""} ${objects.length} objects`, JanitorLogLevel.Info);
+
+            const total = this.#disposeAny(objects);
+
+            if (total > 1) {
+
+                this.#log(`${prefix} ${this.#label ?? ""} - ${total - 1} objects disposed`, JanitorLogLevel.Info);
+
+            }
+
+        }
+
+
+    }
+
+    static trash(_label: string | SupportedJanitorTypes, ...objects: SupportedJanitorTypes[]) {
+
+        const label = typeof _label === "string" ? _label : null;
+
+        const janitor = new Janitor(label);
+
+        if (typeof _label !== "string") {
+
+            objects.push(_label);
+
+        }
+
+        janitor.dispose(...objects);
+
+        return janitor;
 
     }
 

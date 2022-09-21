@@ -1,8 +1,8 @@
-# The Janitor
+# THREE Object Janitor
 
 [![Version](https://badgen.net/npm/v/three-janitor?color=green)](https://www.npmjs.com/package/three-janitor)
 
-A janitor is a utility class that can be used to clean up resources that are no longer needed. Simple with zero-dependencies, primarily for vanilla [three.js](https://threejs.org/)
+A janitor is a utility class that can be used to clean up resources (particularly GPU allocated) that are no longer needed. Zero-dependencies.
 
 ## Installation
 
@@ -21,50 +21,48 @@ const janitor = new Janitor();
 
 // track an Object3D
 const myObject = new THREE.Mesh(...);
-janitor.add(myObject);
+janitor.mop(myObject);
 
 // or simply on a single line
-const myOtherObject = janitor.add(new THREE.Mesh(...));
+const myOtherObject = janitor.mop(new THREE.Mesh(...));
 
 // add callbacks
 const music = new PretendMusic();
 music.play();
-janitor.add(() => music.stop())
+// tracking the dispose method as well as adding a label (optional) for debug purposes
+janitor.mop(() => music.stop(), "music")
 
-// add another janitor to the top level janitor? why not!
+// add another janitor to the top level janitor
+// this works sinsce Janitor is a `Disposable` type anyway
 janitor.add(someOtherFunctionThatReturnsAJanitor());
 
-const disposable = {
-    dispose() {
-        // clean up!
-    }
-}
-// implement a dispose method on your object for easy cleanup!
-janitor.add(disposable)
-
-// when you're done with it, clean it all up! woohoo!
+// when you're done with it, clean it all up.
 janitor.dispose();
 
 ```
 
-### How does it clean up so well? My code smells amazing now!
-> Glad you asked! We use a patented formula :)
+### When calling `Janitor.dispose()`
+- It will go through all the 
 - For `Object3D`, our janitor will visit each child object and call `dispose()` on any `Texture`, `Material`, or `BufferGeometry`. It will then dispose the parent object as well.
 - For call backs it will simply call/execute them.
 - For `Disposable` objects it will call `dispose()`
-- That's it!
+- It will accept Iterable types for all of the above.
 
 
 ### Extra helper methods
 
 ```ts
+const janitor = new Janitor("my Module"); // labels for debugging
+
+janitor.dispose(myObj, myObj2); // call dispose directly without tracking
+
+Janitor.trash(myObj); // same thing statically
+
 // add event listeners and don't worry about cleaning up
 janitor.addEventListener(window, "click", () => alert(`I'm good to go`));
 
-// interval
-janitor.setInterval(() => console.log("interval!"), 5000);
+// when in a node environment or using node like event emitters
+janitor.on(ipcRenderer, "message", () => ...);
 
-janitor.connectAudio(sourceAudioNode, gainAudioNode, audioContext.destination);
 
 ```
-### Contributions welcome.
