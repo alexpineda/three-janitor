@@ -2,11 +2,11 @@
 
 [![Version](https://badgen.net/npm/v/three-janitor?color=green)](https://www.npmjs.com/package/three-janitor)
 
-A janitor is a utility class that can be used to clean up resources (particularly GPU allocated) that are no longer needed. Zero-dependencies.
+> A janitor is a utility class that can be used to clean up resources, especially GPU allocated ones, that are no longer needed by your program.
 
 ## Installation
 
-This library requires the peer dependency [three](https://github.com/mrdoob/three.js/).
+The library only requires the peer dependency [three](https://github.com/mrdoob/three.js/).
 
 ```sh
 npm install three three-janitor
@@ -19,22 +19,22 @@ import { Janitor } from "three-janitor"
 
 const janitor = new Janitor();
 
-// track an Object3D
+// Object3D
 const myObject = new THREE.Mesh(...);
 janitor.mop(myObject);
 
-// or simply on a single line
-const myOtherObject = janitor.mop(new THREE.Mesh(...));
-
-// add callbacks
-const music = new PretendMusic();
+// add callbacks with optional label
+const music = new Beethoven();
 music.play();
-// tracking the dispose method as well as adding a label (optional) for debug purposes
 janitor.mop(() => music.stop(), "music")
 
 // add another janitor to the top level janitor
 // this works sinsce Janitor is a `Disposable` type anyway
-janitor.add(someOtherFunctionThatReturnsAJanitor());
+janitor.mop(someNestedFunctionThatReturnsAJanitor());
+
+// html elements are tracked and then removed from their parents when dispose() is called
+const myElement = document.createElement("div");
+janitor.mop(myElement);
 
 // when you're done with it, clean it all up.
 janitor.dispose();
@@ -42,27 +42,59 @@ janitor.dispose();
 ```
 
 ### When calling `Janitor.dispose()`
-- It will go through all the 
-- For `Object3D`, our janitor will visit each child object and call `dispose()` on any `Texture`, `Material`, or `BufferGeometry`. It will then dispose the parent object as well.
-- For call backs it will simply call/execute them.
+It will go through all the following:
+
+- For `Object3DLike`
+   - disposes any `geometry`
+   - disposes any and all `material` or `material[]`
+   - visits each `material` and disposes any `Texture` property
+   - visits each `uniform` and disposes any `Texture` value
+   - visits `children` and repeats the process.
+   - supports Object3DLike objects like `Point`
+   - works great for entire `Scene` objects.
+- For callbacks it will simply call them.
 - For `Disposable` objects it will call `dispose()`
-- It will accept Iterable types for all of the above.
+- For HTMLElement objects it will call `remove()`
+- It will accept iterable types containing any of the above.
 
 
-### Extra helper methods
+## Utilities
 
 ```ts
-const janitor = new Janitor("my Module"); // labels for debugging
+// labels for debug logging dispose() calls
+const janitor = new Janitor("My Module"); 
+Janitor.logLevel = JanitorLogLevel.Info;
+```
 
-janitor.dispose(myObj, myObj2); // call dispose directly without tracking
+```ts
+// single line method, returns the argument
+const myOtherObject = janitor.mop(new THREE.Mesh(...));
+```
 
-Janitor.trash(myObj); // same thing statically
 
+```ts
+// call dispose directly without mop()
+janitor.dispose(myObj, myObj2); 
+```
+
+```ts
+// same thing statically
+Janitor.trash(myObj); 
+```
+
+```ts
 // add event listeners and don't worry about cleaning up
 janitor.addEventListener(window, "click", () => alert(`I'm good to go`));
+```
 
-// when in a node environment or using node like event emitters
+```ts
+// same thing for using node like event emitters
 janitor.on(ipcRenderer, "message", () => ...);
+```
 
-
+```ts
+// aliases for your preference
+janitor.add();
+janitor.track();
+janitor.mop();
 ```

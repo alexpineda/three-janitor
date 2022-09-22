@@ -11,77 +11,50 @@ export type Object3DLike = {
     clear?: () => void,
 }
 
-const textureKeyNames = [
-    "map",
-    "normalMap",
-    "bumpMap",
-    "displacementMap",
-    "roughnessMap",
-    "emissiveMap",
-];
+const disposeMaterial = (material: Material & { uniforms?: Record<string, any> }) => {
+
+    for (const key of Object.keys(material)) {
+        if (material[key] instanceof Texture && typeof material[key].dispose === "function") {
+            material[key as keyof typeof material].dispose();
+        }
+    }
+
+    if (material.uniforms && typeof material.uniforms === "object") {
+        for (const key of Object.keys(material.uniforms)) {
+            const uniform = material.uniforms[key]?.value;
+            if (uniform instanceof Texture && typeof uniform.dispose === "function") {
+                uniform.dispose();
+            }
+        }
+    }
+
+    material.dispose();
+
+}
 
 export const disposeMesh = (mesh: Object3DLike, log: (message: string) => void = () => { }) => {
 
-    if (mesh.material) {
-        for (const textureKeyName of textureKeyNames) {
+    try {
 
-            const textureKey = textureKeyName as keyof Material;
-            try {
+        if (
+            mesh.material instanceof Material
+        ) {
 
-                if (
-                    mesh.material instanceof Material &&
-                    mesh.material[textureKey] instanceof Texture
-                ) {
+            disposeMaterial(mesh.material);
 
-                    log(`${textureKey} ${mesh.material[textureKey].name}`);
-                    mesh.material[textureKey].dispose();
-                    delete mesh.material[textureKey];
+        } else if (Array.isArray(mesh.material)) {
 
-                } else if (Array.isArray(mesh.material)) {
+            for (const material of mesh.material) {
 
-                    for (const material of mesh.material) {
 
-                        if (material[textureKey] instanceof Texture) {
-
-                            log(`${textureKey} ${material[textureKey].name}`);
-                            material[textureKey].dispose();
-                            delete material[textureKey];
-
-                        }
-
-                    }
-
-                }
-
-            } catch (e) {
-                console.error("error disposing map", e);
-            }
-        }
-
-        // then material(s)
-        try {
-
-            if (mesh.material instanceof Material) {
-
-                log(`material ${mesh.material.name}`);
-                mesh.material.dispose();
-
-            } else if (Array.isArray(mesh.material)) {
-
-                mesh.material.forEach((material, i) => {
-                    log(`material ${i} ${material.name}`);
-                    material.dispose()
-                });
+                disposeMaterial(material);
 
             }
 
-        } catch (e) {
-
-            console.error("error disposing material", e);
-
         }
-        mesh.material = undefined;
 
+    } catch (e) {
+        console.error("error disposing map", e);
     }
 
     try {

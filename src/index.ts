@@ -41,6 +41,10 @@ export class Janitor {
     #keepTrackablesAfterDispose: boolean;
     logger = console;
 
+    // synonym for mop
+    track: (trackable: SupportedJanitorTypes, label?: string) => void;
+    add: (trackable: SupportedJanitorTypes, label?: string) => void;
+
     #log(message: string, level: JanitorLogLevel) {
         if (Janitor.logLevel >= level) {
             this.logger.debug(message);
@@ -54,6 +58,7 @@ export class Janitor {
             this.#label = label ?? "";
             this.#keepTrackablesAfterDispose = keepTrackablesAfterDispose;
         }
+        this.add = this.track = this.mop;
     }
 
     addEventListener(element: { addEventListener: Function, removeEventListener: Function }, event: string, label: string | null = null, callback: Function, options?: AddEventListenerOptions) {
